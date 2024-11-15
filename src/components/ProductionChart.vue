@@ -32,6 +32,10 @@ export default {
       type: String,
       default: 'mensal'
     },
+    lot: {
+      type: Number,
+      default: 1
+    },
     chartType: {
       type: String,
       default: 'bar'
@@ -51,6 +55,11 @@ export default {
             label: 'Rendimento (%)',
             backgroundColor: '#42A5F5', // Cor para o rendimento
             data: []
+          },
+          {
+            label: 'Matéria Prima Necessária (kg)',
+            backgroundColor: '#FFEB3B', // Cor para a matéria prima
+            data: []
           }
         ]
       },
@@ -64,7 +73,7 @@ export default {
           },
           title: {
             display: true,
-            text: 'Indicadores de Perda e Rendimento'
+            text: 'Indicadores de Perda, Rendimento e Matéria Prima'
           }
         }
       }
@@ -77,50 +86,49 @@ export default {
   },
   watch: {
     period(newPeriod) {
-      this.fetchData(newPeriod); // Refaz a requisição sempre que o período mudar
+      this.fetchData(newPeriod, this.lot); // Refaz a requisição sempre que o período mudar
     },
-    chartType(newChartType) {
-      this.chartOptions.type = newChartType; // Atualiza o tipo de gráfico
+    lot(newLot) {
+      this.fetchData(this.period, newLot); // Refaz a requisição sempre que o lote mudar
     }
   },
   mounted() {
-    this.fetchData(this.period); // Chama a função com o período inicial
+    this.fetchData(this.period, this.lot); // Chama a função com o período e lote inicial
   },
   methods: {
     fetchData(period) {
       let response;
 
-      // Dados fictícios para simular a troca de períodos
+      // Dados fictícios para simular a troca de períodos e lotes
       if (period === 'mensal') {
         response = [
-          { month: 'Janeiro', perda: 10, rendimento: 90 },
-          { month: 'Fevereiro', perda: 15, rendimento: 85 },
-          { month: 'Março', perda: 5, rendimento: 95 },
-          { month: 'Abril', perda: 20, rendimento: 80 },
-          { month: 'Maio', perda: 8, rendimento: 92 }
+          { month: 'Janeiro', perda: 12, rendimento: 88, materiaPrima: 100 },
+          { month: 'Fevereiro', perda: 10, rendimento: 90, materiaPrima: 98 },
+          { month: 'Março', perda: 15, rendimento: 85, materiaPrima: 105 }
         ];
-      } else if (period === 'trimestral') {
+      } else if (period === 'semana') {
         response = [
-          { month: '1º Trimestre', perda: 15, rendimento: 85 },
-          { month: '2º Trimestre', perda: 10, rendimento: 90 },
-          { month: '3º Trimestre', perda: 20, rendimento: 80 },
-          { month: '4º Trimestre', perda: 8, rendimento: 92 }
+          { week: 'Semana 1', perda: 5, rendimento: 95, materiaPrima: 30 },
+          { week: 'Semana 2', perda: 8, rendimento: 92, materiaPrima: 35 },
+          { week: 'Semana 3', perda: 10, rendimento: 90, materiaPrima: 40 }
         ];
       } else { // Anual
         response = [
-          { month: '2023', perda: 12, rendimento: 88 },
-          { month: '2024', perda: 10, rendimento: 90 }
+          { year: '2023', perda: 12, rendimento: 88, materiaPrima: 1200 },
+          { year: '2024', perda: 10, rendimento: 90, materiaPrima: 1180 }
         ];
       }
 
-      // Simula a adição incremental de dados
-      const months = response.map(item => item.month);
+      // Atualiza os dados no gráfico
+      const periods = response.map(item => item.month || item.week || item.year);
       const perdas = response.map(item => item.perda);
       const rendimentos = response.map(item => item.rendimento);
+      const materiaPrima = response.map(item => item.materiaPrima);
 
-      this.chartData.labels = months;
+      this.chartData.labels = periods;
       this.chartData.datasets[0].data = perdas;
       this.chartData.datasets[1].data = rendimentos;
+      this.chartData.datasets[2].data = materiaPrima;
     }
   }
 };

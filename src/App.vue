@@ -3,15 +3,25 @@
     <div class="container">
       <header>
         <h1>Dashboard de Perda e Rendimento Nutrilite</h1>
-        <p>Visualize os indicadores de perda e rendimento na produção.</p>
+        <p>Visualize os indicadores de perda, rendimento e matéria-prima dos lotes de produção.</p>
       </header>
+
       <div class="controls">
         <div class="select-container">
           <label for="period">Escolha o Período:</label>
           <select id="period" v-model="selectedPeriod">
+            <option value="semana">Semana</option>
             <option value="mensal">Mensal</option>
-            <option value="trimestral">Trimestral</option>
             <option value="anual">Anual</option>
+          </select>
+        </div>
+
+        <div class="select-container">
+          <label for="lot">Escolha o Lote:</label>
+          <select id="lot" v-model="selectedLot">
+            <option v-for="lot in lotes" :key="lot.id" :value="lot.id">
+              Lote {{ lot.id }}
+            </option>
           </select>
         </div>
 
@@ -23,7 +33,12 @@
           </select>
         </div>
       </div>
-      <ProductionChart :period="selectedPeriod" :chartType="selectedChartType" />
+
+      <ProductionChart 
+        :period="selectedPeriod" 
+        :lot="selectedLot" 
+        :chartType="selectedChartType" 
+      />
     </div>
   </div>
 </template>
@@ -39,7 +54,13 @@ export default {
   data() {
     return {
       selectedPeriod: 'mensal', // Período inicial
-      selectedChartType: 'bar' // Tipo de gráfico inicial
+      selectedLot: 1, // Lote inicial
+      selectedChartType: 'bar', // Tipo de gráfico inicial
+      lotes: [
+        { id: 1, name: 'Lote 1' },
+        { id: 2, name: 'Lote 2' },
+        { id: 3, name: 'Lote 3' }
+      ]
     };
   }
 };
