@@ -17,8 +17,8 @@
         </div>
 
         <div class="select-container">
-          <label for="lot">Escolha o Lote:</label>
-          <select id="lot" v-model="selectedLot">
+          <label for="lots">Escolha os Lotes:</label>
+          <select id="lots" v-model="selectedLots" multiple>
             <option v-for="lot in lotes" :key="lot.id" :value="lot.id">
               Lote {{ lot.id }}
             </option>
@@ -36,7 +36,7 @@
 
       <ProductionChart 
         :period="selectedPeriod" 
-        :lot="selectedLot" 
+        :lots="selectedLots" 
         :chartType="selectedChartType" 
       />
     </div>
@@ -54,12 +54,13 @@ export default {
   data() {
     return {
       selectedPeriod: 'mensal', // Período inicial
-      selectedLot: 1, // Lote inicial
+      selectedLots: [1], // Lotes iniciais
       selectedChartType: 'bar', // Tipo de gráfico inicial
       lotes: [
         { id: 1, name: 'Lote 1' },
         { id: 2, name: 'Lote 2' },
-        { id: 3, name: 'Lote 3' }
+        { id: 3, name: 'Lote 3' },
+        { id: 4, name: 'Lote 4' }
       ]
     };
   }
