@@ -32,9 +32,9 @@ export default {
       type: String,
       default: 'mensal'
     },
-    lotes: {
-      type: Array,
-      default: () => [1]
+    lot: {
+      type: Number,
+      default: 1
     },
     chartType: {
       type: String,
@@ -45,7 +45,23 @@ export default {
     return {
       chartData: {
         labels: [],
-        datasets: []
+        datasets: [
+          {
+            label: 'Perda (%)',
+            backgroundColor: '#FF5252', // Cor para a perda
+            data: []
+          },
+          {
+            label: 'Rendimento (%)',
+            backgroundColor: '#42A5F5', // Cor para o rendimento
+            data: []
+          },
+          {
+            label: 'Matéria Prima Necessária (kg)',
+            backgroundColor: '#FFEB3B', // Cor para a matéria prima
+            data: []
+          }
+        ]
       },
       chartOptions: {
         responsive: true,
@@ -70,18 +86,18 @@ export default {
   },
   watch: {
     period(newPeriod) {
-      this.fetchData(newPeriod, this.lotes); // Refaz a requisição sempre que o período ou lotes mudarem
+      this.fetchData(newPeriod, this.lot); // Refaz a requisição sempre que o período mudar
     },
-    lotes(newLotes) {
-      this.fetchData(this.period, newLotes); // Refaz a requisição sempre que o lote mudar
+    lot(newLot) {
+      this.fetchData(this.period, newLot); // Refaz a requisição sempre que o lote mudar
     }
   },
   mounted() {
-    this.fetchData(this.period, this.lotes); // Chama a função com o período e lotes iniciais
+    this.fetchData(this.period, this.lot); // Chama a função com o período e lote inicial
   },
   methods: {
     fetchData(period) {
-      let response = [];
+      let response;
 
       // Dados fictícios para simular a troca de períodos e lotes
       if (period === 'mensal') {
@@ -103,18 +119,16 @@ export default {
         ];
       }
 
-      // Criação de múltiplos datasets para cada lote selecionado
+      // Atualiza os dados no gráfico
       const periods = response.map(item => item.month || item.week || item.year);
-      const datasets = this.lotes.map((lot) => {
-        return {
-          label: `Lote ${lot}`,
-          backgroundColor: `hsl(${Math.random() * 360}, 100%, 75%)`, // Cor aleatória para cada lote
-          data: response.map(item => item.perda) // Exemplo para perda, mas pode incluir rendimento e matéria prima
-        };
-      });
+      const perdas = response.map(item => item.perda);
+      const rendimentos = response.map(item => item.rendimento);
+      const materiaPrima = response.map(item => item.materiaPrima);
 
       this.chartData.labels = periods;
-      this.chartData.datasets = datasets;
+      this.chartData.datasets[0].data = perdas;
+      this.chartData.datasets[1].data = rendimentos;
+      this.chartData.datasets[2].data = materiaPrima;
     }
   }
 };
