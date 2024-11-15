@@ -32,7 +32,7 @@ export default {
       type: String,
       default: 'mensal'
     },
-    lots: {
+    lotes: {
       type: Array,
       default: () => [1]
     },
@@ -57,11 +57,7 @@ export default {
           },
           title: {
             display: true,
-            text: 'Indicadores de Perda, Rendimento e Matéria-Prima'
-          },
-          tooltip: {
-            mode: 'index',
-            intersect: false
+            text: 'Indicadores de Perda, Rendimento e Matéria Prima'
           }
         },
         scales: {
@@ -69,17 +65,17 @@ export default {
             type: 'linear',
             position: 'left',
             ticks: {
-              callback: value => `${value}%` // Formata como porcentagem
+              callback: (value) => `${value}%` // Formato para perda e rendimento
             }
           },
           y2: {
             type: 'linear',
             position: 'right',
             grid: {
-              drawOnChartArea: false // Evita sobreposição de grades
+              drawOnChartArea: false // Evita a sobreposição da grade
             },
             ticks: {
-              callback: value => `${value} kg` // Formata como kg
+              callback: (value) => `${value} kg` // Formato para matéria-prima
             }
           }
         }
@@ -93,68 +89,65 @@ export default {
   },
   watch: {
     period(newPeriod) {
-      this.fetchData(newPeriod, this.lots); // Atualiza ao mudar o período
+      this.fetchData(newPeriod, this.lotes); // Refaz a requisição sempre que o período ou lotes mudarem
     },
-    lots(newLots) {
-      this.fetchData(this.period, newLots); // Atualiza ao mudar os lotes
+    lotes(newLotes) {
+      this.fetchData(this.period, newLotes); // Refaz a requisição sempre que o lote mudar
     }
   },
   mounted() {
-    this.fetchData(this.period, this.lots); // Carrega os dados iniciais
+    this.fetchData(this.period, this.lotes); // Chama a função com o período e lotes iniciais
   },
   methods: {
-    fetchData(period, lots) {
-      // Dados fictícios por lote e período
-      const dataByLot = {
-        1: [
-          { period: 'Janeiro', perda: 12, rendimento: 88, materiaPrima: 100 },
-          { period: 'Fevereiro', perda: 15, rendimento: 85, materiaPrima: 110 }
-        ],
-        2: [
-          { period: 'Janeiro', perda: 10, rendimento: 90, materiaPrima: 95 },
-          { period: 'Fevereiro', perda: 8, rendimento: 92, materiaPrima: 105 }
-        ],
-        3: [
-          { period: 'Janeiro', perda: 20, rendimento: 80, materiaPrima: 120 },
-          { period: 'Fevereiro', perda: 18, rendimento: 82, materiaPrima: 115 }
-        ]
-      };
+    fetchData(period) {
+      let response = [];
 
-      // Combina os dados dos lotes selecionados
-      const combinedData = lots.flatMap(lot => dataByLot[lot] || []);
+      // Dados fictícios para simular a troca de períodos e lotes
+      if (period === 'mensal') {
+        response = [
+          { month: 'Janeiro', perda: 12, rendimento: 88, materiaPrima: 100 },
+          { month: 'Fevereiro', perda: 10, rendimento: 90, materiaPrima: 98 },
+          { month: 'Março', perda: 15, rendimento: 85, materiaPrima: 105 }
+        ];
+      } else if (period === 'semana') {
+        response = [
+          { week: 'Semana 1', perda: 5, rendimento: 95, materiaPrima: 30 },
+          { week: 'Semana 2', perda: 8, rendimento: 92, materiaPrima: 35 },
+          { week: 'Semana 3', perda: 10, rendimento: 90, materiaPrima: 40 }
+        ];
+      } else { // Anual
+        response = [
+          { year: '2023', perda: 12, rendimento: 88, materiaPrima: 1200 },
+          { year: '2024', perda: 10, rendimento: 90, materiaPrima: 1180 }
+        ];
+      }
 
-      // Agrupa os períodos
-      const labels = [...new Set(combinedData.map(item => item.period))];
-
-      // Cria datasets separados para cada lote
-      const datasets = lots.flatMap(lot => {
-        const lotData = dataByLot[lot] || [];
+      // Criação de múltiplos datasets para cada lote selecionado
+      const periods = response.map(item => item.month || item.week || item.year);
+      const datasets = this.lotes.flatMap((lot) => {
         return [
           {
             label: `Perda (%) - Lote ${lot}`,
-            data: labels.map(label => lotData.find(d => d.period === label)?.perda || 0),
-            borderColor: '#FF5252',
-            backgroundColor: '#FF5252',
-            yAxisID: 'y'
+            backgroundColor: `hsl(${Math.random() * 360}, 100%, 75%)`, // Cor aleatória para cada lote
+            data: response.map(item => item.perda), // Dados de perda
+            yAxisID: 'y' // Usando eixo y para perda
           },
           {
             label: `Rendimento (%) - Lote ${lot}`,
-            data: labels.map(label => lotData.find(d => d.period === label)?.rendimento || 0),
-            borderColor: '#42A5F5',
-            backgroundColor: '#42A5F5',
-            yAxisID: 'y'
+            backgroundColor: `hsl(${Math.random() * 360}, 100%, 85%)`, // Cor aleatória para cada lote
+            data: response.map(item => item.rendimento), // Dados de rendimento
+            yAxisID: 'y' // Usando eixo y para rendimento
           },
           {
             label: `Matéria Prima (kg) - Lote ${lot}`,
-            data: labels.map(label => lotData.find(d => d.period === label)?.materiaPrima || 0),
-            borderColor: '#FFC107',
-            backgroundColor: '#FFC107',
-            yAxisID: 'y2'
+            backgroundColor: `hsl(${Math.random() * 360}, 100%, 65%)`, // Cor aleatória para cada lote
+            data: response.map(item => item.materiaPrima), // Dados de matéria-prima
+            yAxisID: 'y2' // Usando eixo y2 para matéria-prima
           }
         ];
       });
 
-      this.chartData.labels = labels;
+      this.chartData.labels = periods;
       this.chartData.datasets = datasets;
     }
   }
