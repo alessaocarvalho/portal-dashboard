@@ -53,11 +53,24 @@ export default {
         plugins: {
           legend: {
             display: true,
-            position: 'top'
+            position: 'top',
+            labels: {
+              boxWidth: 10, // Tamanho do ícone da legenda
+              padding: 20
+            }
           },
           title: {
             display: true,
             text: 'Indicadores de Perda, Rendimento e Matéria Prima'
+          },
+          tooltip: {
+            callbacks: {
+              label: (tooltipItem) => {
+                const label = tooltipItem.dataset.label || '';
+                const value = tooltipItem.raw;
+                return `${label}: ${value} ${tooltipItem.dataset.yAxisID === 'y' ? '%' : 'kg'}`;
+              }
+            }
           }
         },
         scales: {
@@ -65,7 +78,8 @@ export default {
             type: 'linear',
             position: 'left',
             ticks: {
-              callback: (value) => `${value}%` // Formato para perda e rendimento
+              callback: (value) => `${value}%`, // Formato para perda e rendimento
+              stepSize: 5
             }
           },
           y2: {
@@ -75,7 +89,14 @@ export default {
               drawOnChartArea: false // Evita a sobreposição da grade
             },
             ticks: {
-              callback: (value) => `${value} kg` // Formato para matéria-prima
+              callback: (value) => `${value} kg`, // Formato para matéria-prima
+              stepSize: 100
+            }
+          },
+          x: {
+            ticks: {
+              autoSkip: true,
+              maxTicksLimit: 10, // Limita a quantidade de labels no eixo X
             }
           }
         }
@@ -99,7 +120,7 @@ export default {
     this.fetchData(this.period, this.lotes); // Chama a função com o período e lotes iniciais
   },
   methods: {
-    fetchData(period) {
+    fetchData(period, lotes) {
       let response = [];
 
       // Dados fictícios para simular a troca de períodos e lotes
@@ -122,9 +143,11 @@ export default {
         ];
       }
 
-      // Criação de múltiplos datasets para cada lote selecionado
+      // Definindo as labels com base no tipo de período
       const periods = response.map(item => item.month || item.week || item.year);
-      const datasets = this.lotes.flatMap((lot) => {
+      
+      // Criação de múltiplos datasets para cada lote selecionado
+      const datasets = lotes.flatMap((lot) => {
         return [
           {
             label: `Perda (%) - Lote ${lot}`,
