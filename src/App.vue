@@ -52,20 +52,23 @@
         <h2>Visão Geral e Indicadores</h2>
         <div class="summary">
           <div v-if="summary">
-            <div><strong>Média de Perda (%):</strong> 
-              <span :class="{'alert-red': summary.avgPerda > alertPerda}">{{ summary.avgPerda }}%</span>
+            <div><strong>Média de Perda (%):</strong>
+              <span :class="{ 'alert-red': summary.avgPerda > alertPerda }">{{ summary.avgPerda }}%</span>
             </div>
-            <div><strong>Média de Rendimento (%):</strong> 
-              <span :class="{'alert-orange': summary.avgRendimento < alertRendimento}">{{ summary.avgRendimento }}%</span>
+            <div><strong>Média de Rendimento (%):</strong>
+              <span :class="{ 'alert-orange': summary.avgRendimento < alertRendimento }">{{ summary.avgRendimento
+                }}%</span>
             </div>
             <div><strong>Média de Matéria Prima (kg):</strong> {{ summary.avgMateriaPrima }} kg</div>
           </div>
 
           <div v-if="highestLoss">
-            <div><strong>Ordem de Produção com Maior Perda (%):</strong> Ordem {{ highestLoss.ordemProducao }} ({{ highestLoss.perda }}%)</div>
+            <div><strong>Ordem de Produção com Maior Perda (%):</strong> Ordem {{ highestLoss.ordemProducao }} ({{
+              highestLoss.perda }}%)</div>
           </div>
           <div v-if="highestYield">
-            <div><strong>Ordem de Produção com Maior Rendimento (%):</strong> Ordem {{ highestYield.ordemProducao }} ({{ highestYield.rendimento }}%)</div>
+            <div><strong>Ordem de Produção com Maior Rendimento (%):</strong> Ordem {{ highestYield.ordemProducao }} ({{
+              highestYield.rendimento }}%)</div>
           </div>
         </div>
 
@@ -76,11 +79,7 @@
       </div>
 
       <!-- Gráficos Dinâmicos -->
-      <ProductionChart 
-        :period="selectedPeriod" 
-        :orders="selectedOrders" 
-        :chartType="selectedChartType" 
-      />
+      <ProductionChart :period="selectedPeriod" :orders="selectedOrders" :chartType="selectedChartType" />
 
       <!-- Tabela de Dados com Destaques -->
       <div class="data-table">
@@ -98,8 +97,8 @@
           <tbody>
             <tr v-for="(item, index) in rawData" :key="index">
               <td>{{ item.period }}</td>
-              <td :class="{'alert-red': item.perda > alertPerda}">{{ item.perda }}</td>
-              <td :class="{'alert-orange': item.rendimento < alertRendimento}">{{ item.rendimento }}</td>
+              <td :class="{ 'alert-red': item.perda > alertPerda }">{{ item.perda }}</td>
+              <td :class="{ 'alert-orange': item.rendimento < alertRendimento }">{{ item.rendimento }}</td>
               <td>{{ item.materiaPrima }}</td>
               <td>{{ item.concentrado }}</td>
             </tr>
@@ -168,13 +167,16 @@ export default {
         const materiaPrimaData = await materiaPrimaResponse.json();
         const concentradoData = await concentradoResponse.json();
 
+        // Depuração: Verifique os dados
+        console.log(materiaPrimaData, concentradoData);
+
         // Filtrando as ordens de produção para garantir que são as mesmas
         const filteredMateriaPrimaData = materiaPrimaData.filter(item =>
-          orders.includes(item.ordemProducao)
+          item["Ordem de Produção"] && orders.includes(item["Ordem de Produção"].toString()) // Verifique se a chave existe
         );
 
         const filteredConcentradoData = concentradoData.filter(item =>
-          orders.includes(item.ordemProducao)
+          item["Ordem de Produção"] && orders.includes(item["Ordem de Produção"].toString()) // Verifique se a chave existe
         );
 
         // Agrupar os dados por ordem de produção e calcular perdas e rendimentos
@@ -183,9 +185,9 @@ export default {
         this.rawData = groupedData;
 
         // Cálculo dos resumos
-        const avgPerda = groupedData.reduce((acc, item) => acc + item.perda, 0) / groupedData.length;
-        const avgRendimento = groupedData.reduce((acc, item) => acc + item.rendimento, 0) / groupedData.length;
-        const avgMateriaPrima = groupedData.reduce((acc, item) => acc + item.materiaPrima, 0) / groupedData.length;
+        const avgPerda = groupedData.length > 0 ? groupedData.reduce((acc, item) => acc + item.perda, 0) / groupedData.length : 0;
+        const avgRendimento = groupedData.length > 0 ? groupedData.reduce((acc, item) => acc + item.rendimento, 0) / groupedData.length : 0;
+        const avgMateriaPrima = groupedData.length > 0 ? groupedData.reduce((acc, item) => acc + item.materiaPrima, 0) / groupedData.length : 0;
 
         this.summary = {
           avgPerda,
@@ -208,13 +210,15 @@ export default {
       const aggregatedData = [];
 
       materiaPrimaData.forEach(materiaPrimaItem => {
-        const correspondingConcentradoItem = concentradoData.find(item => item.ordemProducao === materiaPrimaItem.ordemProducao);
+        const correspondingConcentradoItem = concentradoData.find(item => item["Ordem de Produção"] === materiaPrimaItem["Ordem de Produção"]);
 
         if (correspondingConcentradoItem) {
-          const periodValue = period === 'mensal' ? materiaPrimaItem.mes : (period === 'anual' ? materiaPrimaItem.ano : materiaPrimaItem.dia);
+          // Ajustando a extração do período, utilizando a chave correta da API
+          const periodValue = period === 'mensal' ? materiaPrimaItem["Mês"] :
+            (period === 'anual' ? materiaPrimaItem["Ano"] : materiaPrimaItem["Dia"]);
 
-          const materiaPrimaQuantity = parseFloat(materiaPrimaItem.somaMateriaPrima || 0);
-          const concentradoQuantity = parseFloat(correspondingConcentradoItem.somaConcentrado || 0);
+          const materiaPrimaQuantity = parseFloat(materiaPrimaItem["Soma de Matéria-prima (Kg)"] || 0);
+          const concentradoQuantity = parseFloat(correspondingConcentradoItem["Soma de Concentrado (Kg)"] || 0);
 
           const perda = materiaPrimaQuantity ? ((materiaPrimaQuantity - concentradoQuantity) / materiaPrimaQuantity) * 100 : 0;
           const rendimento = materiaPrimaQuantity ? (concentradoQuantity / materiaPrimaQuantity) * 100 : 0;
@@ -255,7 +259,6 @@ export default {
 </script>
 
 <style scoped>
-
 /* Estilos gerais de alerta */
 .alert-box {
   background-color: #ffdddd;
@@ -322,7 +325,8 @@ header p {
   min-width: 200px;
 }
 
-select, input {
+select,
+input {
   width: 100%;
   padding: 12px;
   border-radius: 8px;
@@ -331,7 +335,8 @@ select, input {
   background-color: #f9f9f9;
 }
 
-select:focus, input:focus {
+select:focus,
+input:focus {
   border-color: #2f4e7d;
 }
 
@@ -356,7 +361,8 @@ select:focus, input:focus {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
 }
 
-table th, table td {
+table th,
+table td {
   padding: 12px;
   border: 1px solid #ddd;
   text-align: center;

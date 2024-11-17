@@ -1,9 +1,4 @@
-<template>
-  <div class="chart-container">
-    <div v-if="chartData.labels.length === 0">Carregando dados...</div>
-    <component :is="chartComponent" :data="chartData" :options="chartOptions" height="400px" />
-  </div>
-</template>
+
 
 <script>
 import { Bar, Line } from 'vue-chartjs';
@@ -126,7 +121,7 @@ export default {
       this.error = null;
 
       try {
-        // Consultas sem parâmetros na URL
+        // Consultas para as APIs
         const materiaPrimaResponse = await fetch(`http://localhost:3000/api/get_soma_materia_prima`);
         const concentradoResponse = await fetch(`http://localhost:3000/api/get_soma_concentrado`);
 
@@ -181,16 +176,16 @@ export default {
 
       if (period === 'mensal') {
         // Agrupando por mês
-        const months = [...new Set(materiaPrimaData.map(item => item.mes))];
+        const months = [...new Set(materiaPrimaData.map(item => item.Mês))];
 
         months.forEach(month => {
           const materiaPrimaQuantity = materiaPrimaData
-            .filter(item => item.mes === month)
-            .reduce((acc, item) => acc + parseFloat(item['somaMateriaPrima'] || 0), 0);
+            .filter(item => item.Mês === month)
+            .reduce((acc, item) => acc + parseFloat(item['Soma de Matéria-prima (Kg)'] || 0), 0);
 
           const concentradoQuantity = concentradoData
-            .filter(item => item.mes === month)
-            .reduce((acc, item) => acc + parseFloat(item['somaConcentrado'] || 0), 0);
+            .filter(item => item.Mês === month)
+            .reduce((acc, item) => acc + parseFloat(item['Soma de Concentrado (Kg)'] || 0), 0);
 
           aggregatedData.push({
             period: month,
