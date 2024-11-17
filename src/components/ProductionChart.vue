@@ -1,3 +1,10 @@
+<template>
+  <div class="chart-container">
+    <div v-if="chartData.labels.length === 0">Carregando dados...</div>
+    <component :is="chartComponent" :data="chartData" :options="chartOptions" height="400px" />
+  </div>
+</template>
+
 <script>
 import { Bar, Line } from 'vue-chartjs';
 import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, LineElement, CategoryScale, LinearScale, PointElement } from 'chart.js';
