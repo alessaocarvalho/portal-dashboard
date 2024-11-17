@@ -36,6 +36,17 @@
             <option value="line">Linha</option>
           </select>
         </div>
+
+        <!-- Novas opções para níveis de alerta -->
+        <div class="input-container">
+          <label for="alertPerda">Nível de Alerta de Perda (%):</label>
+          <input type="number" id="alertPerda" v-model="alertPerda" min="0" max="100" />
+        </div>
+
+        <div class="input-container">
+          <label for="alertRendimento">Meta de Rendimento (%):</label>
+          <input type="number" id="alertRendimento" v-model="alertRendimento" min="0" max="100" />
+        </div>
       </div>
 
       <!-- Visão Geral com Alertas e Indicadores -->
@@ -44,9 +55,11 @@
         <div class="summary">
           <div v-if="summary">
             <div><strong>Média de Perda (%):</strong> 
-              <span :class="{'alert-red': summary.avgPerda > 10}">{{ summary.avgPerda }}%</span>
+              <span :class="{'alert-red': summary.avgPerda > alertPerda}">{{ summary.avgPerda }}%</span>
             </div>
-            <div><strong>Média de Rendimento (%):</strong> {{ summary.avgRendimento }}%</div>
+            <div><strong>Média de Rendimento (%):</strong> 
+              <span :class="{'alert-orange': summary.avgRendimento < alertRendimento}">{{ summary.avgRendimento }}%</span>
+            </div>
             <div><strong>Média de Matéria Prima (kg):</strong> {{ summary.avgMateriaPrima }} kg</div>
           </div>
 
@@ -86,8 +99,8 @@
           <tbody>
             <tr v-for="(item, index) in rawData" :key="index">
               <td>{{ item.period }}</td>
-              <td :class="{'alert-red': item.perda > 10}">{{ item.perda }}</td>
-              <td :class="{'alert-orange': item.rendimento < 85}">{{ item.rendimento }}</td>
+              <td :class="{'alert-red': item.perda > alertPerda}">{{ item.perda }}</td>
+              <td :class="{'alert-orange': item.rendimento < alertRendimento}">{{ item.rendimento }}</td>
               <td>{{ item.materiaPrima }}</td>
             </tr>
           </tbody>
@@ -122,7 +135,9 @@ export default {
       highestLoss: null,
       highestYield: null,
       rawData: [],
-      alert: null
+      alert: null,
+      alertPerda: 10,  // Valor de perda por padrão
+      alertRendimento: 85 // Meta de rendimento por padrão
     };
   },
   watch: {
@@ -131,6 +146,12 @@ export default {
     },
     selectedLotes(newLotes) {
       this.fetchData(this.selectedPeriod, newLotes);
+    },
+    alertPerda() {
+      this.checkAlerts();
+    },
+    alertRendimento() {
+      this.checkAlerts();
     }
   },
   mounted() {
@@ -176,10 +197,13 @@ export default {
       this.highestYield = response.reduce((max, item) => (item.rendimento > max.rendimento ? item : max), response[0]);
 
       // Verificar alertas
-      if (avgPerda > 10) {
-        this.alert = { message: 'Alerta: A média de perda está acima de 10%' };
-      } else if (avgRendimento < 85) {
-        this.alert = { message: 'Alerta: O rendimento médio está abaixo de 85%' };
+      this.checkAlerts();
+    },
+    checkAlerts() {
+      if (this.summary.avgPerda > this.alertPerda) {
+        this.alert = { message: `Alerta: A média de perda está acima de ${this.alertPerda}%` };
+      } else if (this.summary.avgRendimento < this.alertRendimento) {
+        this.alert = { message: `Alerta: O rendimento médio está abaixo da meta de ${this.alertRendimento}%` };
       } else {
         this.alert = null;
       }
@@ -258,7 +282,13 @@ header p {
   min-width: 200px;
 }
 
-select {
+.input-container {
+  flex: 1;
+  margin: 0 10px;
+  min-width: 200px;
+}
+
+select, input {
   width: 100%;
   padding: 12px;
   border-radius: 8px;
@@ -267,7 +297,7 @@ select {
   background-color: #f9f9f9;
 }
 
-select:focus {
+select:focus, input:focus {
   border-color: #2f4e7d;
 }
 
