@@ -1,13 +1,3 @@
-<template>
-  <div class="chart-container">
-    <div v-if="isLoading">Carregando dados...</div>
-    <div v-else-if="error">{{ error }}</div>
-    <div v-else>
-      <component :is="chartComponent" :data="chartData" :options="chartOptions" height="400px" />
-    </div>
-  </div>
-</template>
-
 <script>
 import { Bar, Line } from 'vue-chartjs';
 import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, LineElement, CategoryScale, LinearScale, PointElement } from 'chart.js';
@@ -129,9 +119,9 @@ export default {
       this.error = null;
 
       try {
-        // Ajuste para realizar a consulta de acordo com a ordem de produção
-        const materiaPrimaResponse = await fetch(`http://localhost:3000/api/get_soma_materia_prima?ordemProducao=${orders.join(',')}`);
-        const concentradoResponse = await fetch(`http://localhost:3000/api/get_soma_concentrado?ordemProducao=${orders.join(',')}`);
+        // Consultas sem parâmetros na URL
+        const materiaPrimaResponse = await fetch(`http://localhost:3000/api/get_soma_materia_prima`);
+        const concentradoResponse = await fetch(`http://localhost:3000/api/get_soma_concentrado`);
 
         if (!materiaPrimaResponse.ok || !concentradoResponse.ok) {
           throw new Error('Falha ao obter dados da API.');
@@ -140,16 +130,17 @@ export default {
         const materiaPrimaData = await materiaPrimaResponse.json();
         const concentradoData = await concentradoResponse.json();
 
-        // Filtrando os dados de acordo com as ordens de produção
-        const filteredMateriaPrima = materiaPrimaData.filter(item => orders.includes(parseInt(item['ordemProducao'])));
-        const filteredConcentrado = concentradoData.filter(item => orders.includes(parseInt(item['ordemProducao'])));
+        // Verificando se os dados estão completos
+        if (!materiaPrimaData || !concentradoData) {
+          throw new Error('Dados da API estão incompletos.');
+        }
 
-        // Agrupando dados com base no período
-        const groupedData = this.aggregateData(filteredMateriaPrima, filteredConcentrado, period);
+        // Agrupando os dados com base no período (mensal, por exemplo)
+        const groupedData = this.aggregateData(materiaPrimaData, concentradoData, period);
 
         const periods = groupedData.map(item => item.period);
 
-        // Construindo datasets para o gráfico
+        // Criando os datasets para o gráfico
         const datasets = orders.flatMap((order) => {
           return [
             {
@@ -167,6 +158,7 @@ export default {
           ];
         });
 
+        // Atualizando os dados do gráfico
         this.chartData.labels = periods;
         this.chartData.datasets = datasets;
       } catch (error) {
@@ -176,19 +168,22 @@ export default {
       }
     },
 
+    // Função para agrupar dados por período
     aggregateData(materiaPrimaData, concentradoData, period) {
       const aggregatedData = [];
 
       if (period === 'mensal') {
-        const months = [...new Set(materiaPrimaData.map(item => item['mes']))];
+        // Agrupando por mês
+        const months = [...new Set(materiaPrimaData.map(item => item.mes))];
+
         months.forEach(month => {
           const materiaPrimaQuantity = materiaPrimaData
-            .filter(item => item['mes'] === month)
-            .reduce((acc, item) => acc + parseFloat(item['somaMateriaPrima']), 0);
+            .filter(item => item.mes === month)
+            .reduce((acc, item) => acc + parseFloat(item['somaMateriaPrima'] || 0), 0);
 
           const concentradoQuantity = concentradoData
-            .filter(item => item['mes'] === month)
-            .reduce((acc, item) => acc + parseFloat(item['somaConcentrado']), 0);
+            .filter(item => item.mes === month)
+            .reduce((acc, item) => acc + parseFloat(item['somaConcentrado'] || 0), 0);
 
           aggregatedData.push({
             period: month,

@@ -25,14 +25,6 @@
           </select>
         </div>
 
-        <!-- Select para escolher as ordens de produção -->
-        <div class="select-container">
-          <label for="orderSelect">Escolha a Ordem de Produção:</label>
-          <select id="orderSelect" v-model="selectedOrders" multiple @change="onOrderChange">
-            <option v-for="order in orders" :key="order.id" :value="order.id">{{ order.id }}</option>
-          </select>
-        </div>
-
         <!-- Novas opções para níveis de alerta -->
         <div class="input-container">
           <label for="alertPerda">Nível de Alerta de Perda (%):</label>
@@ -42,6 +34,16 @@
         <div class="input-container">
           <label for="alertRendimento">Meta de Rendimento (%):</label>
           <input type="number" id="alertRendimento" v-model="alertRendimento" min="0" max="100" />
+        </div>
+
+        <!-- Select para ordens de produção -->
+        <div class="select-container">
+          <label for="orders">Escolha a Ordem de Produção:</label>
+          <select id="orders" v-model="selectedOrders" @change="onOrdersChange">
+            <option v-for="order in orders" :key="order.ordemProducao" :value="order.ordemProducao">
+              Ordem {{ order.ordemProducao }}
+            </option>
+          </select>
         </div>
       </div>
 
@@ -124,14 +126,14 @@ export default {
       selectedPeriod: 'mensal',
       selectedOrders: ['1314701001'],  // Exemplo de ordem de produção
       selectedChartType: 'bar',
-      orders: [],  // Lista de ordens de produção
       summary: null,
       highestLoss: null,
       highestYield: null,
       rawData: [],
       alert: null,
       alertPerda: 10,  // Valor de perda por padrão
-      alertRendimento: 85 // Meta de rendimento por padrão
+      alertRendimento: 85, // Meta de rendimento por padrão
+      orders: []  // Lista de ordens de produção a ser preenchida pela API
     };
   },
   watch: {
@@ -149,30 +151,15 @@ export default {
     }
   },
   mounted() {
-    this.fetchOrders();
+    this.fetchData(this.selectedPeriod, this.selectedOrders);
   },
   methods: {
-    async fetchOrders() {
-      try {
-        const response = await fetch(`http://localhost:3000/api/get_ordens_producao`);
-        if (!response.ok) {
-          throw new Error('Falha ao obter ordens de produção.');
-        }
-
-        const data = await response.json();
-        this.orders = data;  // Supondo que a API retorna um array de ordens de produção
-        // Aqui, você pode inicializar o primeiro valor de selectedOrders, se necessário
-        if (this.orders.length > 0) {
-          this.selectedOrders = [this.orders[0].id];  // Inicializa com a primeira ordem de produção
-        }
-      } catch (error) {
-        console.error('Erro ao buscar ordens de produção:', error);
-      }
-    },
+    // Função para buscar dados de matéria-prima e concentrado
     async fetchData(period, orders) {
       try {
-        const materiaPrimaResponse = await fetch(`http://localhost:3000/api/get_soma_materia_prima?ordemProducao=${orders.join(',')}`);
-        const concentradoResponse = await fetch(`http://localhost:3000/api/get_soma_concentrado?ordemProducao=${orders.join(',')}`);
+        // Buscar os dados de matéria-prima
+        const materiaPrimaResponse = await fetch('http://localhost:3000/api/get_soma_materia_prima');
+        const concentradoResponse = await fetch('http://localhost:3000/api/get_soma_concentrado');
 
         if (!materiaPrimaResponse.ok || !concentradoResponse.ok) {
           throw new Error('Falha ao obter dados da API.');
@@ -181,10 +168,20 @@ export default {
         const materiaPrimaData = await materiaPrimaResponse.json();
         const concentradoData = await concentradoResponse.json();
 
-        const groupedData = this.aggregateData(materiaPrimaData, concentradoData, period);
+        // Filtrando as ordens de produção para garantir que são as mesmas
+        const filteredMateriaPrimaData = materiaPrimaData.filter(item =>
+          orders.includes(item.ordemProducao)
+        );
+
+        const filteredConcentradoData = concentradoData.filter(item =>
+          orders.includes(item.ordemProducao)
+        );
+
+        // Agrupar os dados por ordem de produção e calcular perdas e rendimentos
+        const groupedData = this.aggregateData(filteredMateriaPrimaData, filteredConcentradoData, period);
 
         this.rawData = groupedData;
-        
+
         // Cálculo dos resumos
         const avgPerda = groupedData.reduce((acc, item) => acc + item.perda, 0) / groupedData.length;
         const avgRendimento = groupedData.reduce((acc, item) => acc + item.rendimento, 0) / groupedData.length;
@@ -199,57 +196,59 @@ export default {
         this.highestLoss = groupedData.reduce((max, item) => item.perda > max.perda ? item : max, groupedData[0]);
         this.highestYield = groupedData.reduce((max, item) => item.rendimento > max.rendimento ? item : max, groupedData[0]);
 
-        this.checkAlerts();
+        this.checkAlerts(); // Verificar se há alertas
+
       } catch (error) {
-        console.error('Erro ao buscar dados:', error);
+        console.error('Erro ao carregar dados:', error);
       }
     },
+
+    // Função para agregar dados por período
     aggregateData(materiaPrimaData, concentradoData, period) {
       const aggregatedData = [];
-      if (period === 'mensal') {
-        const months = [...new Set(materiaPrimaData.map(item => item['mes']))];
-        months.forEach(month => {
-          // Convertendo para float antes de somar
-          const materiaPrimaQuantity = materiaPrimaData
-            .filter(item => item['mes'] === month)
-            .reduce((acc, item) => acc + parseFloat(item['somaMateriaPrima'] || 0), 0);
 
-          const concentradoQuantity = concentradoData
-            .filter(item => item['mes'] === month)
-            .reduce((acc, item) => acc + parseFloat(item['somaConcentrado'] || 0), 0);
+      materiaPrimaData.forEach(materiaPrimaItem => {
+        const correspondingConcentradoItem = concentradoData.find(item => item.ordemProducao === materiaPrimaItem.ordemProducao);
 
-          // Calculando perda e rendimento
+        if (correspondingConcentradoItem) {
+          const periodValue = period === 'mensal' ? materiaPrimaItem.mes : (period === 'anual' ? materiaPrimaItem.ano : materiaPrimaItem.dia);
+
+          const materiaPrimaQuantity = parseFloat(materiaPrimaItem.somaMateriaPrima || 0);
+          const concentradoQuantity = parseFloat(correspondingConcentradoItem.somaConcentrado || 0);
+
           const perda = materiaPrimaQuantity ? ((materiaPrimaQuantity - concentradoQuantity) / materiaPrimaQuantity) * 100 : 0;
           const rendimento = materiaPrimaQuantity ? (concentradoQuantity / materiaPrimaQuantity) * 100 : 0;
 
           aggregatedData.push({
-            period: month,
+            period: periodValue,
             perda,
             rendimento,
             materiaPrima: materiaPrimaQuantity,
             concentrado: concentradoQuantity
           });
-        });
-      }
+        }
+      });
+
       return aggregatedData;
     },
+
+    // Função de verificação de alertas
     checkAlerts() {
-      if (this.summary.avgPerda > this.alertPerda) {
-        this.alert = { message: 'Atenção: Perda média está acima do limite!' };
-      } else if (this.summary.avgRendimento < this.alertRendimento) {
-        this.alert = { message: 'Atenção: Rendimento médio está abaixo da meta!' };
-      } else {
-        this.alert = null;
+      if (this.summary) {
+        if (this.summary.avgPerda > this.alertPerda) {
+          this.alert = {
+            message: `Alerta! A perda média (${this.summary.avgPerda}%) está acima do limite (${this.alertPerda}%)!`,
+            type: 'red'
+          };
+        } else if (this.summary.avgRendimento < this.alertRendimento) {
+          this.alert = {
+            message: `Alerta! O rendimento médio (${this.summary.avgRendimento}%) está abaixo da meta (${this.alertRendimento}%)!`,
+            type: 'orange'
+          };
+        } else {
+          this.alert = null;
+        }
       }
-    },
-    onPeriodChange() {
-      this.fetchData(this.selectedPeriod, this.selectedOrders);
-    },
-    onChartTypeChange() {
-      this.fetchData(this.selectedPeriod, this.selectedOrders);
-    },
-    onOrderChange() {
-      this.fetchData(this.selectedPeriod, this.selectedOrders);
     }
   }
 };
