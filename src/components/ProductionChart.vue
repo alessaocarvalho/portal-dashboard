@@ -1,7 +1,10 @@
 <template>
   <div class="chart-container">
-    <div v-if="chartData.labels.length === 0">Carregando dados...</div>
-    <component :is="chartComponent" :data="chartData" :options="chartOptions" height="400px" />
+    <div v-if="isLoading">Carregando dados...</div>
+    <div v-else-if="error">{{ error }}</div>
+    <div v-else>
+      <component :is="chartComponent" :data="chartData" :options="chartOptions" height="400px" />
+    </div>
   </div>
 </template>
 
@@ -9,7 +12,6 @@
 import { Bar, Line } from 'vue-chartjs';
 import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, LineElement, CategoryScale, LinearScale, PointElement } from 'chart.js';
 
-// Registra os elementos necessários
 ChartJS.register(
   Title,
   Tooltip,
@@ -32,9 +34,9 @@ export default {
       type: String,
       default: 'mensal'
     },
-    lotes: {
+    orders: {
       type: Array,
-      default: () => [1]
+      default: () => [1314701001]
     },
     chartType: {
       type: String,
@@ -55,20 +57,20 @@ export default {
             display: true,
             position: 'top',
             labels: {
-              boxWidth: 10, // Tamanho do ícone da legenda
+              boxWidth: 10,
               padding: 20
             }
           },
           title: {
             display: true,
-            text: 'Indicadores de Perda, Rendimento e Matéria Prima'
+            text: 'Indicadores de Rendimento e Matéria Prima'
           },
           tooltip: {
             callbacks: {
               label: (tooltipItem) => {
                 const label = tooltipItem.dataset.label || '';
                 const value = tooltipItem.raw;
-                return `${label}: ${value} ${tooltipItem.dataset.yAxisID === 'y' ? '%' : 'kg'}`;
+                return `${label}: ${value} kg`;
               }
             }
           }
@@ -78,100 +80,125 @@ export default {
             type: 'linear',
             position: 'left',
             ticks: {
-              callback: (value) => `${value}%`, // Formato para perda e rendimento
-              stepSize: 5
+              callback: (value) => `${value} kg`,
+              stepSize: 100
             }
           },
           y2: {
             type: 'linear',
             position: 'right',
             grid: {
-              drawOnChartArea: false // Evita a sobreposição da grade
+              drawOnChartArea: false
             },
             ticks: {
-              callback: (value) => `${value} kg`, // Formato para matéria-prima
+              callback: (value) => `${value} kg`,
               stepSize: 100
             }
           },
           x: {
             ticks: {
               autoSkip: true,
-              maxTicksLimit: 10, // Limita a quantidade de labels no eixo X
+              maxTicksLimit: 10
             }
           }
         }
-      }
+      },
+      isLoading: false,
+      error: null
     };
   },
   computed: {
     chartComponent() {
-      return this.chartType === 'bar' ? Bar : Line; // Troca entre tipos de gráficos
+      return this.chartType === 'bar' ? Bar : Line;
     }
   },
   watch: {
     period(newPeriod) {
-      this.fetchData(newPeriod, this.lotes); // Refaz a requisição sempre que o período ou lotes mudarem
+      this.fetchData(newPeriod, this.orders);
     },
-    lotes(newLotes) {
-      this.fetchData(this.period, newLotes); // Refaz a requisição sempre que o lote mudar
+    orders(newOrders) {
+      this.fetchData(this.period, newOrders);
     }
   },
   mounted() {
-    this.fetchData(this.period, this.lotes); // Chama a função com o período e lotes iniciais
+    this.fetchData(this.period, this.orders);
   },
   methods: {
-    fetchData(period, lotes) {
-      let response = [];
+    async fetchData(period, orders) {
+      this.isLoading = true;
+      this.error = null;
 
-      // Dados fictícios para simular a troca de períodos e lotes
+      try {
+        // Ajuste para realizar a consulta de acordo com a ordem de produção
+        const materiaPrimaResponse = await fetch(`http://localhost:3000/api/get_soma_materia_prima?ordemProducao=${orders.join(',')}`);
+        const concentradoResponse = await fetch(`http://localhost:3000/api/get_soma_concentrado?ordemProducao=${orders.join(',')}`);
+
+        if (!materiaPrimaResponse.ok || !concentradoResponse.ok) {
+          throw new Error('Falha ao obter dados da API.');
+        }
+
+        const materiaPrimaData = await materiaPrimaResponse.json();
+        const concentradoData = await concentradoResponse.json();
+
+        // Filtrando os dados de acordo com as ordens de produção
+        const filteredMateriaPrima = materiaPrimaData.filter(item => orders.includes(parseInt(item['ordemProducao'])));
+        const filteredConcentrado = concentradoData.filter(item => orders.includes(parseInt(item['ordemProducao'])));
+
+        // Agrupando dados com base no período
+        const groupedData = this.aggregateData(filteredMateriaPrima, filteredConcentrado, period);
+
+        const periods = groupedData.map(item => item.period);
+
+        // Construindo datasets para o gráfico
+        const datasets = orders.flatMap((order) => {
+          return [
+            {
+              label: `Matéria Prima (kg) - Ordem ${order}`,
+              backgroundColor: `hsl(${Math.random() * 360}, 100%, 65%)`,
+              data: groupedData.map(item => item.materiaPrima),
+              yAxisID: 'y2'
+            },
+            {
+              label: `Concentrado (kg) - Ordem ${order}`,
+              backgroundColor: `hsl(${Math.random() * 360}, 100%, 75%)`,
+              data: groupedData.map(item => item.concentrado),
+              yAxisID: 'y'
+            }
+          ];
+        });
+
+        this.chartData.labels = periods;
+        this.chartData.datasets = datasets;
+      } catch (error) {
+        this.error = error.message;
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    aggregateData(materiaPrimaData, concentradoData, period) {
+      const aggregatedData = [];
+
       if (period === 'mensal') {
-        response = [
-          { month: 'Janeiro', perda: 12, rendimento: 88, materiaPrima: 100 },
-          { month: 'Fevereiro', perda: 10, rendimento: 90, materiaPrima: 98 },
-          { month: 'Março', perda: 15, rendimento: 85, materiaPrima: 105 }
-        ];
-      } else if (period === 'semana') {
-        response = [
-          { week: 'Semana 1', perda: 5, rendimento: 95, materiaPrima: 30 },
-          { week: 'Semana 2', perda: 8, rendimento: 92, materiaPrima: 35 },
-          { week: 'Semana 3', perda: 10, rendimento: 90, materiaPrima: 40 }
-        ];
-      } else { // Anual
-        response = [
-          { year: '2023', perda: 12, rendimento: 88, materiaPrima: 1200 },
-          { year: '2024', perda: 10, rendimento: 90, materiaPrima: 1180 }
-        ];
+        const months = [...new Set(materiaPrimaData.map(item => item['mes']))];
+        months.forEach(month => {
+          const materiaPrimaQuantity = materiaPrimaData
+            .filter(item => item['mes'] === month)
+            .reduce((acc, item) => acc + parseFloat(item['somaMateriaPrima']), 0);
+
+          const concentradoQuantity = concentradoData
+            .filter(item => item['mes'] === month)
+            .reduce((acc, item) => acc + parseFloat(item['somaConcentrado']), 0);
+
+          aggregatedData.push({
+            period: month,
+            materiaPrima: materiaPrimaQuantity,
+            concentrado: concentradoQuantity
+          });
+        });
       }
 
-      // Definindo as labels com base no tipo de período
-      const periods = response.map(item => item.month || item.week || item.year);
-      
-      // Criação de múltiplos datasets para cada lote selecionado
-      const datasets = lotes.flatMap((lot) => {
-        return [
-          {
-            label: `Perda (%) - Lote ${lot}`,
-            backgroundColor: `hsl(${Math.random() * 360}, 100%, 75%)`, // Cor aleatória para cada lote
-            data: response.map(item => item.perda), // Dados de perda
-            yAxisID: 'y' // Usando eixo y para perda
-          },
-          {
-            label: `Rendimento (%) - Lote ${lot}`,
-            backgroundColor: `hsl(${Math.random() * 360}, 100%, 85%)`, // Cor aleatória para cada lote
-            data: response.map(item => item.rendimento), // Dados de rendimento
-            yAxisID: 'y' // Usando eixo y para rendimento
-          },
-          {
-            label: `Matéria Prima (kg) - Lote ${lot}`,
-            backgroundColor: `hsl(${Math.random() * 360}, 100%, 65%)`, // Cor aleatória para cada lote
-            data: response.map(item => item.materiaPrima), // Dados de matéria-prima
-            yAxisID: 'y2' // Usando eixo y2 para matéria-prima
-          }
-        ];
-      });
-
-      this.chartData.labels = periods;
-      this.chartData.datasets = datasets;
+      return aggregatedData;
     }
   }
 };

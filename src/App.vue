@@ -3,7 +3,7 @@
     <div class="container">
       <header>
         <h1>Dashboard de Perda e Rendimento Nutrilite</h1>
-        <p>Visualize os indicadores de perda, rendimento e matéria-prima dos lotes de produção com facilidade.</p>
+        <p>Visualize os indicadores de perda, rendimento e matéria-prima das ordens de produção com facilidade.</p>
       </header>
 
       <!-- Filtros de Dados -->
@@ -18,22 +18,18 @@
         </div>
 
         <div class="select-container">
-          <label for="lots">Escolha os Lotes:</label>
-          <select id="lots" v-model="selectedLotes" multiple @change="onLotesChange">
-            <option v-for="lot in lotes" :key="lot.id" :value="lot.id">
-              Lote {{ lot.id }}
-            </option>
-          </select>
-          <div v-if="selectedLotes.length">
-            <p>{{ selectedLotes.length }} Lote(s) Selecionado(s)</p>
-          </div>
-        </div>
-
-        <div class="select-container">
           <label for="chartType">Escolha o Tipo de Gráfico:</label>
           <select id="chartType" v-model="selectedChartType" @change="onChartTypeChange">
             <option value="bar">Barra</option>
             <option value="line">Linha</option>
+          </select>
+        </div>
+
+        <!-- Select para escolher as ordens de produção -->
+        <div class="select-container">
+          <label for="orderSelect">Escolha a Ordem de Produção:</label>
+          <select id="orderSelect" v-model="selectedOrders" multiple @change="onOrderChange">
+            <option v-for="order in orders" :key="order.id" :value="order.id">{{ order.id }}</option>
           </select>
         </div>
 
@@ -64,10 +60,10 @@
           </div>
 
           <div v-if="highestLoss">
-            <div><strong>Lote com Maior Perda (%):</strong> Lote {{ highestLoss.lote }} ({{ highestLoss.perda }}%)</div>
+            <div><strong>Ordem de Produção com Maior Perda (%):</strong> Ordem {{ highestLoss.ordemProducao }} ({{ highestLoss.perda }}%)</div>
           </div>
           <div v-if="highestYield">
-            <div><strong>Lote com Maior Rendimento (%):</strong> Lote {{ highestYield.lote }} ({{ highestYield.rendimento }}%)</div>
+            <div><strong>Ordem de Produção com Maior Rendimento (%):</strong> Ordem {{ highestYield.ordemProducao }} ({{ highestYield.rendimento }}%)</div>
           </div>
         </div>
 
@@ -80,7 +76,7 @@
       <!-- Gráficos Dinâmicos -->
       <ProductionChart 
         :period="selectedPeriod" 
-        :lotes="selectedLotes" 
+        :orders="selectedOrders" 
         :chartType="selectedChartType" 
       />
 
@@ -94,6 +90,7 @@
               <th>Perda (%)</th>
               <th>Rendimento (%)</th>
               <th>Matéria Prima (kg)</th>
+              <th>Concentrado (kg)</th>
             </tr>
           </thead>
           <tbody>
@@ -102,11 +99,12 @@
               <td :class="{'alert-red': item.perda > alertPerda}">{{ item.perda }}</td>
               <td :class="{'alert-orange': item.rendimento < alertRendimento}">{{ item.rendimento }}</td>
               <td>{{ item.materiaPrima }}</td>
+              <td>{{ item.concentrado }}</td>
             </tr>
           </tbody>
         </table>
         <div v-else>
-          <p>Nenhum dado disponível para o período e lotes selecionados.</p>
+          <p>Nenhum dado disponível para o período e ordens de produção selecionadas.</p>
         </div>
       </div>
     </div>
@@ -124,13 +122,9 @@ export default {
   data() {
     return {
       selectedPeriod: 'mensal',
-      selectedLotes: [1],
+      selectedOrders: ['1314701001'],  // Exemplo de ordem de produção
       selectedChartType: 'bar',
-      lotes: [
-        { id: 1, name: 'Lote 1' },
-        { id: 2, name: 'Lote 2' },
-        { id: 3, name: 'Lote 3' }
-      ],
+      orders: [],  // Lista de ordens de produção
       summary: null,
       highestLoss: null,
       highestYield: null,
@@ -142,10 +136,10 @@ export default {
   },
   watch: {
     selectedPeriod(newPeriod) {
-      this.fetchData(newPeriod, this.selectedLotes);
+      this.fetchData(newPeriod, this.selectedOrders);
     },
-    selectedLotes(newLotes) {
-      this.fetchData(this.selectedPeriod, newLotes);
+    selectedOrders(newOrders) {
+      this.fetchData(this.selectedPeriod, newOrders);
     },
     alertPerda() {
       this.checkAlerts();
@@ -155,73 +149,114 @@ export default {
     }
   },
   mounted() {
-    this.fetchData(this.selectedPeriod, this.selectedLotes);
+    this.fetchOrders();
   },
   methods: {
-    fetchData(period) {
-      let response = [];
-      if (period === 'mensal') {
-        response = [
-          { period: 'Janeiro', perda: 12, rendimento: 88, materiaPrima: 100 },
-          { period: 'Fevereiro', perda: 10, rendimento: 90, materiaPrima: 98 },
-          { period: 'Março', perda: 15, rendimento: 85, materiaPrima: 105 }
-        ];
-      } else if (period === 'semana') {
-        response = [
-          { period: 'Semana 1', perda: 5, rendimento: 95, materiaPrima: 30 },
-          { period: 'Semana 2', perda: 8, rendimento: 92, materiaPrima: 35 },
-          { period: 'Semana 3', perda: 10, rendimento: 90, materiaPrima: 40 }
-        ];
-      } else {
-        response = [
-          { period: '2023', perda: 12, rendimento: 88, materiaPrima: 1200 },
-          { period: '2024', perda: 10, rendimento: 90, materiaPrima: 1180 }
-        ];
+    async fetchOrders() {
+      try {
+        const response = await fetch(`http://localhost:3000/api/get_ordens_producao`);
+        if (!response.ok) {
+          throw new Error('Falha ao obter ordens de produção.');
+        }
+
+        const data = await response.json();
+        this.orders = data;  // Supondo que a API retorna um array de ordens de produção
+        // Aqui, você pode inicializar o primeiro valor de selectedOrders, se necessário
+        if (this.orders.length > 0) {
+          this.selectedOrders = [this.orders[0].id];  // Inicializa com a primeira ordem de produção
+        }
+      } catch (error) {
+        console.error('Erro ao buscar ordens de produção:', error);
       }
+    },
+    async fetchData(period, orders) {
+      try {
+        const materiaPrimaResponse = await fetch(`http://localhost:3000/api/get_soma_materia_prima?ordemProducao=${orders.join(',')}`);
+        const concentradoResponse = await fetch(`http://localhost:3000/api/get_soma_concentrado?ordemProducao=${orders.join(',')}`);
 
-      // Armazenando dados brutos para a tabela
-      this.rawData = response;
+        if (!materiaPrimaResponse.ok || !concentradoResponse.ok) {
+          throw new Error('Falha ao obter dados da API.');
+        }
 
-      // Cálculo dos resumos (média e maiores indicadores)
-      const avgPerda = response.reduce((acc, item) => acc + item.perda, 0) / response.length;
-      const avgRendimento = response.reduce((acc, item) => acc + item.rendimento, 0) / response.length;
-      const avgMateriaPrima = response.reduce((acc, item) => acc + item.materiaPrima, 0) / response.length;
+        const materiaPrimaData = await materiaPrimaResponse.json();
+        const concentradoData = await concentradoResponse.json();
 
-      this.summary = {
-        avgPerda: avgPerda.toFixed(2),
-        avgRendimento: avgRendimento.toFixed(2),
-        avgMateriaPrima: avgMateriaPrima.toFixed(2)
-      };
+        const groupedData = this.aggregateData(materiaPrimaData, concentradoData, period);
 
-      this.highestLoss = response.reduce((max, item) => (item.perda > max.perda ? item : max), response[0]);
-      this.highestYield = response.reduce((max, item) => (item.rendimento > max.rendimento ? item : max), response[0]);
+        this.rawData = groupedData;
+        
+        // Cálculo dos resumos
+        const avgPerda = groupedData.reduce((acc, item) => acc + item.perda, 0) / groupedData.length;
+        const avgRendimento = groupedData.reduce((acc, item) => acc + item.rendimento, 0) / groupedData.length;
+        const avgMateriaPrima = groupedData.reduce((acc, item) => acc + item.materiaPrima, 0) / groupedData.length;
 
-      // Verificar alertas
-      this.checkAlerts();
+        this.summary = {
+          avgPerda,
+          avgRendimento,
+          avgMateriaPrima
+        };
+
+        this.highestLoss = groupedData.reduce((max, item) => item.perda > max.perda ? item : max, groupedData[0]);
+        this.highestYield = groupedData.reduce((max, item) => item.rendimento > max.rendimento ? item : max, groupedData[0]);
+
+        this.checkAlerts();
+      } catch (error) {
+        console.error('Erro ao buscar dados:', error);
+      }
+    },
+    aggregateData(materiaPrimaData, concentradoData, period) {
+      const aggregatedData = [];
+      if (period === 'mensal') {
+        const months = [...new Set(materiaPrimaData.map(item => item['mes']))];
+        months.forEach(month => {
+          // Convertendo para float antes de somar
+          const materiaPrimaQuantity = materiaPrimaData
+            .filter(item => item['mes'] === month)
+            .reduce((acc, item) => acc + parseFloat(item['somaMateriaPrima'] || 0), 0);
+
+          const concentradoQuantity = concentradoData
+            .filter(item => item['mes'] === month)
+            .reduce((acc, item) => acc + parseFloat(item['somaConcentrado'] || 0), 0);
+
+          // Calculando perda e rendimento
+          const perda = materiaPrimaQuantity ? ((materiaPrimaQuantity - concentradoQuantity) / materiaPrimaQuantity) * 100 : 0;
+          const rendimento = materiaPrimaQuantity ? (concentradoQuantity / materiaPrimaQuantity) * 100 : 0;
+
+          aggregatedData.push({
+            period: month,
+            perda,
+            rendimento,
+            materiaPrima: materiaPrimaQuantity,
+            concentrado: concentradoQuantity
+          });
+        });
+      }
+      return aggregatedData;
     },
     checkAlerts() {
       if (this.summary.avgPerda > this.alertPerda) {
-        this.alert = { message: `Alerta: A média de perda está acima de ${this.alertPerda}%` };
+        this.alert = { message: 'Atenção: Perda média está acima do limite!' };
       } else if (this.summary.avgRendimento < this.alertRendimento) {
-        this.alert = { message: `Alerta: O rendimento médio está abaixo da meta de ${this.alertRendimento}%` };
+        this.alert = { message: 'Atenção: Rendimento médio está abaixo da meta!' };
       } else {
         this.alert = null;
       }
     },
     onPeriodChange() {
-      console.log(`Período alterado para: ${this.selectedPeriod}`);
-    },
-    onLotesChange() {
-      console.log(`Lotes alterados: ${this.selectedLotes}`);
+      this.fetchData(this.selectedPeriod, this.selectedOrders);
     },
     onChartTypeChange() {
-      console.log(`Tipo de gráfico alterado para: ${this.selectedChartType}`);
+      this.fetchData(this.selectedPeriod, this.selectedOrders);
+    },
+    onOrderChange() {
+      this.fetchData(this.selectedPeriod, this.selectedOrders);
     }
   }
 };
 </script>
 
 <style scoped>
+
 /* Estilos gerais de alerta */
 .alert-box {
   background-color: #ffdddd;
