@@ -1,7 +1,10 @@
 <template>
   <div class="chart-container">
-    <div v-if="chartData.labels.length === 0">Carregando dados...</div>
-    <component :is="chartComponent" :data="chartData" :options="chartOptions" height="400px" />
+    <div v-if="isLoading">Carregando dados...</div>
+    <div v-else-if="error">{{ error }}</div>
+    <div v-else>
+      <component :is="chartComponent" :data="chartData" :options="chartOptions" height="400px" />
+    </div>
   </div>
 </template>
 
@@ -9,7 +12,6 @@
 import { Bar, Line } from 'vue-chartjs';
 import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, LineElement, CategoryScale, LinearScale, PointElement } from 'chart.js';
 
-// Registra os elementos necessários
 ChartJS.register(
   Title,
   Tooltip,
@@ -32,6 +34,10 @@ export default {
       type: String,
       default: 'mensal'
     },
+    orders: {
+      type: Array,
+      default: () => [1314701001]
+    },
     chartType: {
       type: String,
       default: 'bar'
@@ -41,18 +47,7 @@ export default {
     return {
       chartData: {
         labels: [],
-        datasets: [
-          {
-            label: 'Perda (%)',
-            backgroundColor: '#FF5252', // Cor para a perda
-            data: []
-          },
-          {
-            label: 'Rendimento (%)',
-            backgroundColor: '#42A5F5', // Cor para o rendimento
-            data: []
-          }
-        ]
+        datasets: []
       },
       chartOptions: {
         responsive: true,
@@ -60,67 +55,150 @@ export default {
         plugins: {
           legend: {
             display: true,
-            position: 'top'
+            position: 'top',
+            labels: {
+              boxWidth: 10,
+              padding: 20
+            }
           },
           title: {
             display: true,
-            text: 'Indicadores de Perda e Rendimento'
+            text: 'Indicadores de Rendimento e Matéria Prima'
+          },
+          tooltip: {
+            callbacks: {
+              label: (tooltipItem) => {
+                const label = tooltipItem.dataset.label || '';
+                const value = tooltipItem.raw;
+                return `${label}: ${value} kg`;
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            type: 'linear',
+            position: 'left',
+            ticks: {
+              callback: (value) => `${value} kg`,
+              stepSize: 100
+            }
+          },
+          y2: {
+            type: 'linear',
+            position: 'right',
+            grid: {
+              drawOnChartArea: false
+            },
+            ticks: {
+              callback: (value) => `${value} kg`,
+              stepSize: 100
+            }
+          },
+          x: {
+            ticks: {
+              autoSkip: true,
+              maxTicksLimit: 10
+            }
           }
         }
-      }
+      },
+      isLoading: false,
+      error: null
     };
   },
   computed: {
     chartComponent() {
-      return this.chartType === 'bar' ? Bar : Line; // Troca entre tipos de gráficos
+      return this.chartType === 'bar' ? Bar : Line;
     }
   },
   watch: {
     period(newPeriod) {
-      this.fetchData(newPeriod); // Refaz a requisição sempre que o período mudar
+      this.fetchData(newPeriod, this.orders);
     },
-    chartType(newChartType) {
-      this.chartOptions.type = newChartType; // Atualiza o tipo de gráfico
+    orders(newOrders) {
+      this.fetchData(this.period, newOrders);
     }
   },
   mounted() {
-    this.fetchData(this.period); // Chama a função com o período inicial
+    this.fetchData(this.period, this.orders);
   },
   methods: {
-    fetchData(period) {
-      let response;
+    async fetchData(period, orders) {
+      this.isLoading = true;
+      this.error = null;
 
-      // Dados fictícios para simular a troca de períodos
+      try {
+        // Ajuste para realizar a consulta de acordo com a ordem de produção
+        const materiaPrimaResponse = await fetch(`http://localhost:3000/api/get_soma_materia_prima?ordemProducao=${orders.join(',')}`);
+        const concentradoResponse = await fetch(`http://localhost:3000/api/get_soma_concentrado?ordemProducao=${orders.join(',')}`);
+
+        if (!materiaPrimaResponse.ok || !concentradoResponse.ok) {
+          throw new Error('Falha ao obter dados da API.');
+        }
+
+        const materiaPrimaData = await materiaPrimaResponse.json();
+        const concentradoData = await concentradoResponse.json();
+
+        // Filtrando os dados de acordo com as ordens de produção
+        const filteredMateriaPrima = materiaPrimaData.filter(item => orders.includes(parseInt(item['ordemProducao'])));
+        const filteredConcentrado = concentradoData.filter(item => orders.includes(parseInt(item['ordemProducao'])));
+
+        // Agrupando dados com base no período
+        const groupedData = this.aggregateData(filteredMateriaPrima, filteredConcentrado, period);
+
+        const periods = groupedData.map(item => item.period);
+
+        // Construindo datasets para o gráfico
+        const datasets = orders.flatMap((order) => {
+          return [
+            {
+              label: `Matéria Prima (kg) - Ordem ${order}`,
+              backgroundColor: `hsl(${Math.random() * 360}, 100%, 65%)`,
+              data: groupedData.map(item => item.materiaPrima),
+              yAxisID: 'y2'
+            },
+            {
+              label: `Concentrado (kg) - Ordem ${order}`,
+              backgroundColor: `hsl(${Math.random() * 360}, 100%, 75%)`,
+              data: groupedData.map(item => item.concentrado),
+              yAxisID: 'y'
+            }
+          ];
+        });
+
+        this.chartData.labels = periods;
+        this.chartData.datasets = datasets;
+      } catch (error) {
+        this.error = error.message;
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    aggregateData(materiaPrimaData, concentradoData, period) {
+      const aggregatedData = [];
+
       if (period === 'mensal') {
-        response = [
-          { month: 'Janeiro', perda: 10, rendimento: 90 },
-          { month: 'Fevereiro', perda: 15, rendimento: 85 },
-          { month: 'Março', perda: 5, rendimento: 95 },
-          { month: 'Abril', perda: 20, rendimento: 80 },
-          { month: 'Maio', perda: 8, rendimento: 92 }
-        ];
-      } else if (period === 'trimestral') {
-        response = [
-          { month: '1º Trimestre', perda: 15, rendimento: 85 },
-          { month: '2º Trimestre', perda: 10, rendimento: 90 },
-          { month: '3º Trimestre', perda: 20, rendimento: 80 },
-          { month: '4º Trimestre', perda: 8, rendimento: 92 }
-        ];
-      } else { // Anual
-        response = [
-          { month: '2023', perda: 12, rendimento: 88 },
-          { month: '2024', perda: 10, rendimento: 90 }
-        ];
+        const months = [...new Set(materiaPrimaData.map(item => item['mes']))];
+        months.forEach(month => {
+          const materiaPrimaQuantity = materiaPrimaData
+            .filter(item => item['mes'] === month)
+            .reduce((acc, item) => acc + parseFloat(item['somaMateriaPrima']), 0);
+
+          const concentradoQuantity = concentradoData
+            .filter(item => item['mes'] === month)
+            .reduce((acc, item) => acc + parseFloat(item['somaConcentrado']), 0);
+
+          aggregatedData.push({
+            period: month,
+            materiaPrima: materiaPrimaQuantity,
+            concentrado: concentradoQuantity
+          });
+        });
       }
 
-      // Simula a adição incremental de dados
-      const months = response.map(item => item.month);
-      const perdas = response.map(item => item.perda);
-      const rendimentos = response.map(item => item.rendimento);
-
-      this.chartData.labels = months;
-      this.chartData.datasets[0].data = perdas;
-      this.chartData.datasets[1].data = rendimentos;
+      return aggregatedData;
     }
   }
 };
